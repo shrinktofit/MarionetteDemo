@@ -45,17 +45,35 @@ export class Joystick extends cc.Eventify(cc.Component) {
         this._originalPositionBar = this._bar.getPosition(new cc.math.Vec3());
         this._originalPositionBackground = this._background.getPosition(new cc.math.Vec3());
 
-        this.node.on(cc.Node.EventType.TOUCH_START, this._onThisNodeTouchStart, this);
-        this.node.on(cc.Node.EventType.TOUCH_END, this._onThisNodeTouchEnd, this);
-        this.node.on(cc.Node.EventType.TOUCH_CANCEL, this._onThisNodeTouchCancelled, this);
-        this.node.on(cc.Node.EventType.TOUCH_MOVE, this._onThisNodeTouchMove, this);
+        if (cc.sys.hasFeature(cc.sys.Feature.EVENT_MOUSE)) {
+            this.node.on(cc.Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
+            //this.node.on(cc.Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
+            // this.node.on(cc.Node.EventType.MOUSE_UP, this._onMouseUp, this);
+            cc.input.on(cc.Input.EventType.MOUSE_MOVE, (eventMouse) => {
+                this._onClickOrTouchMove(eventMouse.getDelta());
+            });
+            cc.input.on(cc.Input.EventType.MOUSE_UP, () => {
+                this._onClickOrTouchEnd();
+            });
+        } else {
+            this.node.on(cc.Node.EventType.TOUCH_START, this._onThisNodeTouchStart, this);
+            this.node.on(cc.Node.EventType.TOUCH_END, this._onThisNodeTouchEnd, this);
+            this.node.on(cc.Node.EventType.TOUCH_CANCEL, this._onThisNodeTouchCancelled, this);
+            this.node.on(cc.Node.EventType.TOUCH_MOVE, this._onThisNodeTouchMove, this);
+        }
     }
 
     public onDestroy () {
-        this.node.off(cc.Node.EventType.TOUCH_START, this._onThisNodeTouchStart, this);
-        this.node.off(cc.Node.EventType.TOUCH_END, this._onThisNodeTouchEnd, this);
-        this.node.off(cc.Node.EventType.TOUCH_CANCEL, this._onThisNodeTouchCancelled, this);
-        this.node.off(cc.Node.EventType.TOUCH_MOVE, this._onThisNodeTouchMove, this);
+        if (cc.sys.hasFeature(cc.sys.Feature.EVENT_MOUSE)) {
+            this.node.off(cc.Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
+            this.node.off(cc.Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
+            this.node.off(cc.Node.EventType.MOUSE_UP, this._onMouseUp, this);
+        } else {
+            this.node.off(cc.Node.EventType.TOUCH_START, this._onThisNodeTouchStart, this);
+            this.node.off(cc.Node.EventType.TOUCH_END, this._onThisNodeTouchEnd, this);
+            this.node.off(cc.Node.EventType.TOUCH_CANCEL, this._onThisNodeTouchCancelled, this);
+            this.node.off(cc.Node.EventType.TOUCH_MOVE, this._onThisNodeTouchMove, this);
+        }
     }
 
     public update (deltaTime: number) {
@@ -69,28 +87,40 @@ export class Joystick extends cc.Eventify(cc.Component) {
     private _pressing = false;
     private _direction: cc.math.Vec2 = new cc.math.Vec2();
 
+    private _onMouseDown (event: cc.EventMouse) {
+        switch (event.getButton()) {
+            default:
+                break;
+            case cc.EventMouse.BUTTON_LEFT:
+                this._onClickOrTouch(event.getUILocationX(), event.getUILocationY());
+                break;
+        }
+    }
+
+    private _onMouseMove (event: cc.EventMouse) {
+        this._onClickOrTouchMove(new cc.math.Vec2(event.getDeltaX(), event.getDeltaY()));
+    }
+
+    private _onMouseUp (event: cc.EventMouse) {
+        switch (event.getButton()) {
+            default:
+                break;
+            case cc.EventMouse.BUTTON_LEFT:
+                this._onClickOrTouchEnd();
+                break;
+        }
+    }
+
     private _onThisNodeTouchStart (touchEvent: cc.EventTouch) {
         const touch = touchEvent.touch;
         if (!touch) {
             return;
         }
-        const localPosition = this._uiTransform.convertToNodeSpaceAR(
-            new cc.math.Vec3(touch.getUILocationX(), touch.getUILocationY(), 0.0),
-            new cc.math.Vec3(),
-        );
-        this._bar.setPosition(localPosition);
-        this._background.setPosition(localPosition);
-        this._pressing = true;
-        cc.game.canvas?.requestPointerLock?.();
-        this.emit(JoystickEventType.PRESS);
+        this._onClickOrTouch(touch.getUILocationX(), touch.getUILocationY());
     }
 
     private _onThisNodeTouchEnd () {
-        this._bar.setPosition(this._originalPositionBar);
-        this._background.setPosition(this._originalPositionBackground);
-        this._pressing = false;
-        this.emit(JoystickEventType.RELEASE);
-        globalThis.document?.exitPointerLock?.();
+        this._onClickOrTouchEnd();
     }
     
     private _onThisNodeTouchCancelled () {
@@ -103,9 +133,35 @@ export class Joystick extends cc.Eventify(cc.Component) {
             return;
         }
 
+        this._onClickOrTouchMove(touch.getDelta());
+    }
+
+    private _onClickOrTouch(x: number, y: number) {
+        const localPosition = this._uiTransform.convertToNodeSpaceAR(
+            new cc.math.Vec3(x, y, 0.0),
+            new cc.math.Vec3(),
+        );
+        this._bar.setPosition(localPosition);
+        this._background.setPosition(localPosition);
+        this._pressing = true;
+        cc.game.canvas?.requestPointerLock?.();
+        this.emit(JoystickEventType.PRESS);
+    }
+
+    private _onClickOrTouchEnd() {
+        this._bar.setPosition(this._originalPositionBar);
+        this._background.setPosition(this._originalPositionBackground);
+        this._pressing = false;
+        this.emit(JoystickEventType.RELEASE);
+        globalThis.document?.exitPointerLock?.();
+    }
+
+    private _onClickOrTouchMove(delta2D: cc.math.Vec2) {
+        if (!this._pressing) {
+            return;
+        }
         const backgroundPosition = this._background.getPosition();
 
-        const delta2D = touch.getDelta();
         const delta = new cc.math.Vec3(delta2D.x, delta2D.y);
 
         const barPosition = this._bar.getPosition(new cc.math.Vec3());
@@ -120,6 +176,10 @@ export class Joystick extends cc.Eventify(cc.Component) {
 
         console.log(`Move ${delta}`);
         this.emit(JoystickEventType.MOVE, this._direction);
+    }
+
+    private _onGlobalMouseUp () {
+        this._onClickOrTouchEnd();
     }
 }
 

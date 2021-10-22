@@ -100,7 +100,7 @@ export class ShapeSelector {
     }
 
     @_decorator.property
-    get range() {
+    get shape() {
         return this._range;
     }
 

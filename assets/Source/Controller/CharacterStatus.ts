@@ -5,6 +5,8 @@ import { towardVec3 } from '../Utils/Math';
 
 const DEFAULT_ACCELERATION = 1.29 * 4.0;
 
+const DEFAULT_DECELERATION = 1.29 * 1.0;
+
 const VELOCITY_ERROR = 1e-6;
 @cc._decorator.ccclass
 export class CharacterStatus extends cc.Component {
@@ -57,6 +59,16 @@ export class CharacterStatus extends cc.Component {
                 new cc.math.Vec3(), this.node.position, velocity, deltaTime);
             this.node.setPosition(newPosition);
         }
+    }
+
+    public forceUpdate(deltaTime: number) {
+        this.update(deltaTime);
+    }
+
+    public calculateAccelerationTime() {
+        const diff = cc.math.Vec3.subtract(new cc.math.Vec3(), this._targetVelocity, this._velocity);
+        cc.math.Vec3.divide(diff, diff, this._acceleration);
+        return Math.max(diff.x, diff.y, diff.z);
     }
 
     private _acceleration = new cc.math.Vec3(DEFAULT_ACCELERATION, DEFAULT_ACCELERATION, DEFAULT_ACCELERATION);

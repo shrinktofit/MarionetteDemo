@@ -4,8 +4,10 @@ import type { GraphicsGizmo } from '../Utils/GraphicsGizmo';
 import { CharacterStatus } from '../Controller/CharacterStatus';
 import { MonsterAI } from './MonsterAI';
 import { ShapeSelector } from '../Utils/Shape';
+import { EDITOR } from 'cc/env';
 
 @cc._decorator.ccclass
+@cc._decorator.executeInEditMode
 export class MonsterTerritory extends cc.Component {
     @cc._decorator.property
     public capacity = 0;
@@ -20,35 +22,49 @@ export class MonsterTerritory extends cc.Component {
     public prefab!: cc.Prefab;
 
     @cc._decorator.property(ShapeSelector)
-    public rangeSelector: ShapeSelector = new ShapeSelector();
+    public shapeSelector: ShapeSelector = new ShapeSelector();
+
+    @cc._decorator.property({
+        visible: function(this: MonsterTerritory) {
+            return !!this.shapeSelector.shape.center;
+        },
+    })
+    public useNodeAsShapeCenter = true;
 
     public start () {
-        // this.node.on(cc.Node.EventType.TRANSFORM_CHANGED, () => {
-        //     cc.math.Vec2.set(
-        //         this.rangeSelector.range.center,
-        //         this.node.position.x,
-        //         this.node.position.z,
-        //     );
-        // });
-
-        if (!this.prefab) {
-            return;
-        }
-
-        if (this.rangeSelector.range.center) {
+        if (this.useNodeAsShapeCenter && this.shapeSelector.shape.center) {
             cc.math.Vec2.set(
-                this.rangeSelector.range.center,
+                this.shapeSelector.shape.center,
                 this.node.position.x,
                 this.node.position.z,
             );
         }
+
+        if (EDITOR) {
+            if (this.useNodeAsShapeCenter) {
+                this.node.on(cc.Node.EventType.TRANSFORM_CHANGED, () => {
+                    if (this.shapeSelector) {
+                        cc.math.Vec2.set(
+                            this.shapeSelector.shape.center,
+                            this.node.position.x,
+                            this.node.position.z,
+                        );
+                    }
+                });   
+            }
+            return;
+        }
         
+        if (!this.prefab) {
+            return;
+        }
+
         for (let iItem = 0; iItem < this.capacity; ++iItem) {
             const item = cc.instantiate(this.prefab);
             this.node.addChild(item);
 
             // Random position
-            const positionGround = this.rangeSelector.range.random();
+            const positionGround = this.shapeSelector.shape.random();
             const position = cc.Vec3.set(new cc.Vec3(), positionGround.x, 0.0, positionGround.y);
             item.setPosition(position);
 
@@ -64,12 +80,12 @@ export class MonsterTerritory extends cc.Component {
 
             const ai = item.getComponent<MonsterAI>(MonsterAI);
             if (ai) {
-                ai.territory = this;
+                ai.shapeSelector = this.shapeSelector;
             }
         }
     }
 
     public onGizmo (context: GraphicsGizmo) {
-        this.rangeSelector.range.onGizmo(context);
+        this.shapeSelector.shape.onGizmo(context);
     }
 }

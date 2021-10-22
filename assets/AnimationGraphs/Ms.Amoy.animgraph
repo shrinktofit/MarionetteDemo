@@ -51,8 +51,8 @@
     "__editorExtras__": {
       "viewport": {
         "scale": 0.7799999999999998,
-        "top": 81.78627434519655,
-        "left": 561.848671913362
+        "top": 66.78627434519655,
+        "left": 480.84867191336195
       }
     },
     "_states": [
@@ -2125,8 +2125,8 @@
   {
     "__type__": "cc.animation.ClipMotion",
     "__editorExtras__": {
-      "centerX": -1048.7500000000002,
-      "centerY": 160
+      "centerX": -1099.9038461538464,
+      "centerY": 165.54487179487182
     },
     "clip": {
       "__uuid__": "db47641d-855f-4b0f-8f49-befe4250274c@f5ed5",

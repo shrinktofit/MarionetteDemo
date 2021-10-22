@@ -1,8 +1,9 @@
 import * as cc from 'cc';
 import type { GraphicsGizmo } from '../Utils/GraphicsGizmo';
 import { CharacterStatus } from '../Controller/CharacterStatus';
-import type { MonsterTerritory } from './MonsterTerritory';
 import { injectComponent } from '../Utils/Component';
+import { ShapeSelector } from '../Utils/Shape';
+import { getForward } from '../Utils/NodeUtils';
 
 @cc._decorator.ccclass('MonsterAI')
 export class MonsterAI extends cc.Component {
@@ -12,22 +13,31 @@ export class MonsterAI extends cc.Component {
     @cc._decorator.property
     public maxIdleTime = 0.0;
 
-    public declare territory: MonsterTerritory;
+    @cc._decorator.property
+    public minSpeed = 1.0;
+
+    @cc._decorator.property
+    public maxSpeed = 1.0;
+
+    public declare shapeSelector: ShapeSelector;
     
     update (deltaTime: number) {
         while (!cc.math.approx(deltaTime, 0.0, 1e-5)) {
             switch (this._state) {
-                case StupidState.NONE:
+                case AIState.NONE:
                     this._onStateNone();
                     break;
-                case StupidState.IDLE:
+                case AIState.IDLE:
                     deltaTime = this._onStateIdle(deltaTime);
                     break;
-                case StupidState.ROTATING:
+                case AIState.ROTATING:
                     deltaTime = this._onStateRotate(deltaTime);
                     break;
-                case StupidState.WALKING:
+                case AIState.WALKING:
                     deltaTime = this._onStateWalking(deltaTime);
+                    break;
+                case AIState.STOPPING:
+                    deltaTime = this._onStateStopping(deltaTime);
                     break;
             }
         }
@@ -36,18 +46,15 @@ export class MonsterAI extends cc.Component {
     @injectComponent(CharacterStatus)
     private _characterStatus!: CharacterStatus;
 
-    private _state: StupidState = StupidState.NONE;
+    private _state: AIState = AIState.NONE;
 
     private _idleStateTimer = 0.0;
 
     private _walkStateTimer = 0.0;
 
-    private _walkTarget = new cc.math.Vec3();
+    private _dest = new cc.math.Vec3();
 
-    private _walkSpeed = 0.0;
-
-    private _rotateAxis = new cc.math.Vec3();
-    private _remainRotationDelta = 0.0;
+    private _moveSpeed = 0.0;
 
     private _onStateNone () {
         this._startIdle();
@@ -59,7 +66,7 @@ export class MonsterAI extends cc.Component {
             this._idleStateTimer -= t;
             return deltaTime - t;
         } else {
-            this._startWalk();
+            this._startTurn();
             return deltaTime;
         }
     }
@@ -70,54 +77,83 @@ export class MonsterAI extends cc.Component {
             this._walkStateTimer -= deltaTime;
             return deltaTime - t;
         } else {
-            this._startIdle();
+            this._startStop();
             return deltaTime;
         }
     }
 
-    private _onStateRotate(deltaTime: number) {
-        const rotateSpeed = 180.0;
-        const angle = Math.min(rotateSpeed * deltaTime, this._remainRotationDelta);
-        this.node.rotate(cc.math.Quat.rotateAround(new cc.math.Quat(), cc.math.Quat.IDENTITY, this._rotateAxis, cc.math.toRadian(angle)));
-        this._remainRotationDelta -= angle;
-        if (!this._remainRotationDelta) {
-            this._characterStatus.localVelocity = cc.math.Vec3.multiplyScalar(new cc.math.Vec3(), cc.math.Vec3.UNIT_Z, this._walkSpeed);
-            this._state = StupidState.WALKING;
+    private _onStateStopping (deltaTime: number) {
+        const stopTime = this._characterStatus.calculateAccelerationTime();
+        const consumed = Math.min(deltaTime, stopTime);
+        this._characterStatus.forceUpdate(consumed);
+        if (consumed >= stopTime) {
+            this._startIdle();
         }
-        const consumed = angle / rotateSpeed;
         return deltaTime - consumed;
     }
 
+    private _onStateRotate(deltaTime: number) {
+        const destDir = cc.math.Vec3.subtract(
+            new cc.math.Vec3(), this._dest, this.node.worldPosition);
+        if (cc.math.Vec3.equals(destDir, cc.math.Vec3.ZERO, 1e-5)) {
+            return deltaTime;
+        }
+
+        const distToDest = cc.math.Vec3.len(destDir);
+        cc.math.Vec3.normalize(destDir, destDir);
+        const currentDir = getForward(this.node);
+        const rotateAxis = cc.math.Vec3.cross(new cc.math.Vec3(), currentDir, destDir);
+        cc.math.Vec3.normalize(rotateAxis, rotateAxis);
+        const currentAngle = cc.math.Vec3.angle(
+            currentDir,
+            destDir,
+        );
+
+        if (cc.math.approx(currentAngle, 0.0, 1e-5) || cc.math.approx(currentAngle, Math.PI, 1e-5)) {
+            this._startWalk();
+            return deltaTime;
+        }
+
+        const rotateSpeed = cc.math.toRadian(180.0);
+        const timeRequired = currentAngle / rotateSpeed;
+        const time = Math.min(deltaTime, timeRequired);
+        const q = cc.math.Quat.fromAxisAngle(new cc.math.Quat(), rotateAxis, time * rotateSpeed);
+        const rotation = cc.math.Quat.multiply(new cc.math.Quat(), this.node.worldRotation, q);
+        this.node.setWorldRotation(rotation);
+        
+        return deltaTime - time;
+    }
+
     private _startIdle () {
-        this._state = StupidState.IDLE;
-        this._characterStatus.velocity = cc.Vec3.ZERO;
+        this._state = AIState.IDLE;
         this._idleStateTimer = cc.math.randomRange(this.minIdleTime, this.maxIdleTime);
     }
 
-    private _startWalk () {
-        this._state = StupidState.ROTATING;
-        const targetPointGround = this.territory.rangeSelector.range.random();
-        this._walkTarget = new cc.Vec3(targetPointGround.x, 0.0, targetPointGround.y);
-        this._walkSpeed = cc.randomRange(0.2, 1.0);
-        const dir = cc.math.Vec3.subtract(
-            new cc.math.Vec3(), this._walkTarget, this.node.position);
-        const distance = cc.math.Vec3.len(dir);
-        cc.math.Vec3.normalize(dir, dir);
-        this._walkStateTimer = distance / this._walkSpeed;
+    private _startTurn () {
+        this._state = AIState.ROTATING;
 
-        const currentDir = this.node.forward;
-        cc.math.Vec3.cross(this._rotateAxis, currentDir, dir);
-        const rotateAngle = cc.math.Vec3.dot(
-            dir,
-            currentDir
-        );
-        this._remainRotationDelta = cc.math.toDegree(rotateAngle);
+        const destGround = this.shapeSelector.shape.random();
+        const dest = this._dest = new cc.Vec3(destGround.x, 0.0, destGround.y);
+        
+        this._moveSpeed = cc.randomRange(this.minSpeed, this.maxSpeed);
+        this._walkStateTimer = cc.math.Vec3.distance(dest, this.node.worldPosition) / this._moveSpeed;
+    }
+
+    private _startWalk () {
+        this._state = AIState.WALKING;
+        this._characterStatus.localVelocity = cc.math.Vec3.multiplyScalar(new cc.math.Vec3(), cc.math.Vec3.UNIT_Z, this._moveSpeed);
+    }
+
+    private _startStop () {
+        this._state = AIState.STOPPING;
+        this._characterStatus.localVelocity = cc.math.Vec3.ZERO;
     }
 }
 
-enum StupidState {
+enum AIState {
     NONE,
     IDLE,
     WALKING,
+    STOPPING,
     ROTATING,
 }

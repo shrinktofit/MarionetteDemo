@@ -46,6 +46,10 @@ export class GraphicsGizmo extends cc.Component {
         this._model.initSubModel(0, this._renderingSubMesh.mesh, this.material);
     }
 
+    public onDestroy() {
+        return this.clear();
+    }
+
     public update () {
         if (EDITOR) {
             const components: Array<cc.Component & {

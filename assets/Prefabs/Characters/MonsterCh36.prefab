@@ -3856,6 +3856,10 @@
     "__prefab": {
       "__id__": 146
     },
+    "minIdleTime": 0.5,
+    "maxIdleTime": 1,
+    "minSpeed": 1,
+    "maxSpeed": 2,
     "_id": ""
   },
   {

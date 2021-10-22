@@ -12,6 +12,9 @@ import { getForward } from '../Utils/NodeUtils';
 @cc._decorator.ccclass('FirstPersonCamera')
 @cc._decorator.executionOrder(9999)
 export class FirstPersonCamera extends cc.Component {
+    @cc._decorator.property(cc.Node)
+    public input: cc.Node | null = null;
+
     @cc._decorator.property
     public initialDistance = 1.0;
 
@@ -51,20 +54,29 @@ export class FirstPersonCamera extends cc.Component {
         this._rotateHorizon(this.initialHorizonRotation);
         this._rotateVertical(this.initialVerticalRotation);
         this._updatePosition();
-        cc.systemEvent.on(cc.SystemEvent.EventType.MOUSE_DOWN, this._onMouseDown, this);
-        cc.systemEvent.on(cc.SystemEvent.EventType.MOUSE_MOVE, this._onMouseMove, this);
-        cc.systemEvent.on(cc.SystemEvent.EventType.MOUSE_UP, this._onMouseUp, this);
-        cc.systemEvent.on(cc.SystemEvent.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
-        cc.systemEvent.on(cc.SystemEvent.EventType.TOUCH_START, this._onTouchBegin, this);
-        cc.systemEvent.on(cc.SystemEvent.EventType.TOUCH_MOVE, this._onTouchMove, this);
-        cc.systemEvent.on(cc.SystemEvent.EventType.TOUCH_END, this._onTouchEnd, this);
+        if (this.input) {
+            if (cc.sys.hasFeature(cc.sys.Feature.EVENT_MOUSE)) {
+                this.input.on(cc.Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
+                this.input.on(cc.Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
+                this.input.on(cc.Node.EventType.MOUSE_UP, this._onMouseUp, this);
+                this.input.on(cc.Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
+            } else {
+                this.input.on(cc.Node.EventType.TOUCH_START, this._onTouchBegin, this);
+                this.input.on(cc.Node.EventType.TOUCH_MOVE, this._onTouchMove, this);
+                this.input.on(cc.Node.EventType.TOUCH_END, this._onTouchEnd, this);
+            }
+        }
     }
 
     public onDestroy () {
-        cc.systemEvent.off(cc.SystemEvent.EventType.MOUSE_DOWN, this._onMouseDown, this);
-        cc.systemEvent.off(cc.SystemEvent.EventType.MOUSE_MOVE, this._onMouseMove, this);
-        cc.systemEvent.off(cc.SystemEvent.EventType.MOUSE_UP, this._onMouseUp, this);
-        cc.systemEvent.off(cc.SystemEvent.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
+        if (this.input) {
+            if (cc.sys.hasFeature(cc.sys.Feature.EVENT_MOUSE)) {
+                this.input.off(cc.Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
+                this.input.off(cc.Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
+                this.input.off(cc.Node.EventType.MOUSE_UP, this._onMouseUp, this);
+                this.input.off(cc.Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
+            }
+        }
     }
 
     public update (deltaTime: number) {
@@ -110,7 +122,7 @@ export class FirstPersonCamera extends cc.Component {
     }
 
     private _onMouseMove (event: cc.EventMouse) {
-        if (this._mouseButtonPressing.right) {
+        if (this._mouseOrTouchMoveEnabled) {
             const dx = event.getDeltaX();
             if (dx) {
                 const angle = -dx * this.horizonRotationSpeed;
@@ -138,7 +150,7 @@ export class FirstPersonCamera extends cc.Component {
         this._zoomDelta(deltaZoom);
     }
 
-    private _onTouchBegin (touch: cc.Touch, eventTouch: cc.EventTouch) {
+    private _onTouchBegin (eventTouch: cc.EventTouch) {
         const allTouches = eventTouch.getAllTouches();
         switch (allTouches.length) {
             default: break;
@@ -153,21 +165,23 @@ export class FirstPersonCamera extends cc.Component {
         }
     }
 
-    private _onTouchMove (touch: cc.Touch, eventTouch: cc.EventTouch) {
+    private _onTouchMove (eventTouch: cc.EventTouch) {
         const allTouches = eventTouch.getAllTouches();
         switch (allTouches.length) {
             default: break;
             case 1: {
-                const delta = touch.getDelta();
-                const dx = delta.x;
-                if (dx) {
-                    const angle = -dx * this.horizonRotationSpeed;
-                    this._rotateHorizon(angle);
-                }
-                const dy = delta.y;
-                if (dy) {
-                    const angle = -dy * this.verticalRotationSpeed;
-                    this._rotateVertical(angle);
+                if (this._mouseOrTouchMoveEnabled && eventTouch.touch) {
+                    const delta = eventTouch.touch.getDelta();
+                    const dx = delta.x;
+                    if (dx) {
+                        const angle = -dx * this.horizonRotationSpeed;
+                        this._rotateHorizon(angle);
+                    }
+                    const dy = delta.y;
+                    if (dy) {
+                        const angle = -dy * this.verticalRotationSpeed;
+                        this._rotateVertical(angle);
+                    }
                 }
                 break;
             }
@@ -201,6 +215,7 @@ export class FirstPersonCamera extends cc.Component {
     }
 
     private _autoTrace (deltaTime: number) {
+        const save = cc.math.Vec3.clone(this._currentDir);
         const targetBackward = cc.math.Vec3.negate(new cc.math.Vec3(), getForward(this.target));
         const currentDirNormalized = cc.math.Vec3.normalize(new cc.math.Vec3(), this._currentDir);
         const up = cc.math.Vec3.UNIT_Y;
@@ -218,6 +233,12 @@ export class FirstPersonCamera extends cc.Component {
             const q = cc.math.Quat.fromAxisAngle(new cc.math.Quat(), axis, cc.math.toRadian(clampedAngle));
             cc.math.Vec3.transformQuat(this._currentDir, this._currentDir, q);
             this._currentDirDirty = true;
+        }
+
+        const old = cc.math.Vec3.angle(up, save);
+        const news = cc.math.Vec3.angle(up, this._currentDir);
+        if (!cc.math.approx(old, news, 1e-5)) {
+            debugger;
         }
     }
 
@@ -252,5 +273,9 @@ export class FirstPersonCamera extends cc.Component {
         const q = cc.math.Quat.fromAxisAngle(new cc.math.Quat(), axis, cc.math.toRadian(clampedAngle));
         cc.math.Vec3.transformQuat(this._currentDir, this._currentDir, q);
         this._currentDirDirty = true;
+    }
+
+    private get _mouseOrTouchMoveEnabled() {
+        return this._mouseButtonPressing.left;
     }
 }

@@ -1,13 +1,25 @@
 
-import { _decorator, Component, Node, animation, math } from 'cc';
+import { _decorator, Component, Node, animation, math, input, Input, Touch, EventTouch, EventMouse, systemEvent, SystemEvent } from 'cc';
 import { CharacterStatus } from './CharacterStatus';
 const { ccclass, property } = _decorator;
 
 @ccclass('MsAmoyController')
 export class MsAmoyController extends Component {
+    @_decorator.property
+    public mouseTurnSpeed = 1.0;
+
     public start () {
         this._charStatus = this.getComponent(CharacterStatus)!;
         this._animationController = this.getComponent(animation.AnimationController)!;
+
+        const input = systemEvent;
+        const Input = SystemEvent;
+
+        input.on(Input.EventType.MOUSE_DOWN, this._onMouseDown, this);
+        input.on(Input.EventType.MOUSE_MOVE, this._onMouseMove, this);
+        input.on(Input.EventType.MOUSE_UP, this._onMouseUp, this);
+        input.on(Input.EventType.TOUCH_START, this._onTouchBegin, this);
+        input.on(Input.EventType.TOUCH_MOVE, this._onTouchMove, this);
     }
 
     public update () {
@@ -57,4 +69,45 @@ export class MsAmoyController extends Component {
     private _ironSights = false;
     private declare _charStatus: CharacterStatus;
     private declare _animationController: animation.AnimationController;
+    private _turnEnabled = false;
+
+    private _onMouseDown (event: EventMouse) {
+        switch (event.getButton()) {
+            default:
+                break;
+            case EventMouse.BUTTON_RIGHT:
+                this._turnEnabled = true;
+                break;
+        }
+    }
+
+    private _onMouseMove (event: EventMouse) {
+        if (this._turnEnabled) {
+            const dx = event.getDeltaX();
+            if (dx) {
+                const angle = -dx * this.mouseTurnSpeed;
+                this.node.rotate(
+                    math.Quat.rotateY(new math.Quat(), math.Quat.IDENTITY, math.toRadian(angle)),
+                    Node.NodeSpace.WORLD,
+                );
+            }
+        }
+    }
+
+    private _onMouseUp (event: EventMouse) {
+        switch (event.getButton()) {
+            default:
+                break;
+            case EventMouse.BUTTON_RIGHT:
+                this._turnEnabled = false;
+                break;
+        }
+    }
+
+    private _onTouchBegin (eventTouch: EventTouch) {
+        
+    }
+
+    private _onTouchMove (eventTouch: EventTouch) {
+    }
 }
