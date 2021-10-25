@@ -1,6 +1,7 @@
 
 
 import * as cc from 'cc';
+import { useMouseInput } from '../Utils/Env';
 
 export enum JoystickEventType {
     PRESS,
@@ -45,7 +46,7 @@ export class Joystick extends cc.Eventify(cc.Component) {
         this._originalPositionBar = this._bar.getPosition(new cc.math.Vec3());
         this._originalPositionBackground = this._background.getPosition(new cc.math.Vec3());
 
-        if (cc.sys.hasFeature(cc.sys.Feature.EVENT_MOUSE)) {
+        if (useMouseInput()) {
             this.node.on(cc.Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
             //this.node.on(cc.Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
             // this.node.on(cc.Node.EventType.MOUSE_UP, this._onMouseUp, this);
@@ -64,7 +65,7 @@ export class Joystick extends cc.Eventify(cc.Component) {
     }
 
     public onDestroy () {
-        if (cc.sys.hasFeature(cc.sys.Feature.EVENT_MOUSE)) {
+        if (useMouseInput()) {
             this.node.off(cc.Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
             this.node.off(cc.Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
             this.node.off(cc.Node.EventType.MOUSE_UP, this._onMouseUp, this);

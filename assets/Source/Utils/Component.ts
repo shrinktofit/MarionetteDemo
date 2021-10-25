@@ -18,12 +18,16 @@ export function injectComponent<T extends Component>(componentConstructor: Const
         }
 
         const newDescriptor: PropertyDescriptor = {
+            configurable: true,
+            enumerable: false,
+            writable: true,
             value: function (this: T) {
+                const instance = this.node.getComponent(componentConstructor);
+                Reflect.set(this, propertyKey, instance);
+
                 if (oldMethod) {
                     oldMethod.apply(this);
                 }
-                const instance = this.node.getComponent(componentConstructor);
-                Reflect.set(this, propertyKey, instance);
             },
         };
 

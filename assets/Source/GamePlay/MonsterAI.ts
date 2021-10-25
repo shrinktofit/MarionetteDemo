@@ -4,6 +4,8 @@ import { CharacterStatus } from '../Controller/CharacterStatus';
 import { injectComponent } from '../Utils/Component';
 import { ShapeSelector } from '../Utils/Shape';
 import { getForward } from '../Utils/NodeUtils';
+import { MsAmoyController } from '../Controller/MsAmoyController';
+import { Damageable } from './Damage/Damagable';
 
 @cc._decorator.ccclass('MonsterAI')
 export class MonsterAI extends cc.Component {
@@ -19,10 +21,35 @@ export class MonsterAI extends cc.Component {
     @cc._decorator.property
     public maxSpeed = 1.0;
 
+    @cc._decorator.property
+    public seekingRadius = 0.0;
+
+    @cc._decorator.property
+    public attackRadius = 0.0;
+
+    @cc._decorator.property
+    public abandonDistance = 0.0;
+
+    @cc._decorator.property
+    public patrolEnabled = true;
+
     public declare shapeSelector: ShapeSelector;
     
     update (deltaTime: number) {
         while (!cc.math.approx(deltaTime, 0.0, 1e-5)) {
+            if (!this._targetEnemy) {
+                switch (this._state) {
+                    case AIState.IDLE:
+                    case AIState.ROTATING:
+                    case AIState.WALKING:
+                    case AIState.STOPPING:
+                        if (this._seek()) {
+                            continue;
+                        }
+                        break;
+                }
+            }
+
             switch (this._state) {
                 case AIState.NONE:
                     this._onStateNone();
@@ -39,12 +66,25 @@ export class MonsterAI extends cc.Component {
                 case AIState.STOPPING:
                     deltaTime = this._onStateStopping(deltaTime);
                     break;
+                case AIState.CHASING:
+                    deltaTime = this._onStateChasing(deltaTime);
+                    break;
+                case AIState.ATTACKING:
+                    deltaTime = this._onStateAttacking(deltaTime);
+                    break;
             }
         }
     }
 
+    public onAttackFinished() {
+        this._attackFinished = true;
+    }
+
     @injectComponent(CharacterStatus)
     private _characterStatus!: CharacterStatus;
+
+    @injectComponent(cc.animation.AnimationController)
+    public _animationController!: cc.animation.AnimationController;
 
     private _state: AIState = AIState.NONE;
 
@@ -56,6 +96,10 @@ export class MonsterAI extends cc.Component {
 
     private _moveSpeed = 0.0;
 
+    private _targetEnemy: MsAmoyController | null = null;
+
+    private _attackFinished = true;
+
     private _onStateNone () {
         this._startIdle();
     }
@@ -65,8 +109,11 @@ export class MonsterAI extends cc.Component {
             const t = Math.min(deltaTime, this._idleStateTimer);
             this._idleStateTimer -= t;
             return deltaTime - t;
-        } else {
+        } else if (this.patrolEnabled) {
             this._startTurn();
+            return deltaTime;
+        } else {
+            this._startIdle();
             return deltaTime;
         }
     }
@@ -93,24 +140,22 @@ export class MonsterAI extends cc.Component {
     }
 
     private _onStateRotate(deltaTime: number) {
-        const destDir = cc.math.Vec3.subtract(
-            new cc.math.Vec3(), this._dest, this.node.worldPosition);
-        if (cc.math.Vec3.equals(destDir, cc.math.Vec3.ZERO, 1e-5)) {
-            return deltaTime;
+        if (this._targetEnemy) {
+            const amoyPosition = this._getAmoyPosition(this._targetEnemy);
+            cc.math.Vec3.copy(this._dest, amoyPosition);
         }
-
-        const distToDest = cc.math.Vec3.len(destDir);
-        cc.math.Vec3.normalize(destDir, destDir);
-        const currentDir = getForward(this.node);
-        const rotateAxis = cc.math.Vec3.cross(new cc.math.Vec3(), currentDir, destDir);
-        cc.math.Vec3.normalize(rotateAxis, rotateAxis);
-        const currentAngle = cc.math.Vec3.angle(
-            currentDir,
-            destDir,
-        );
+        
+        const {
+            angle: currentAngle,
+            axis: rotateAxis,
+        } = this._getAngleAxisToTarget(this._dest);
 
         if (cc.math.approx(currentAngle, 0.0, 1e-5) || cc.math.approx(currentAngle, Math.PI, 1e-5)) {
-            this._startWalk();
+            if (this._targetEnemy) {
+                this._startChasing();
+            } else {
+                this._startWalk();
+            }
             return deltaTime;
         }
 
@@ -122,6 +167,46 @@ export class MonsterAI extends cc.Component {
         this.node.setWorldRotation(rotation);
         
         return deltaTime - time;
+    }
+
+    private _onStateChasing(deltaTime: number) {
+        const targetEnemy = this._targetEnemy!;
+        const { angle } = this._getAngleAxisToTarget(this._getAmoyPosition(targetEnemy));
+        if (!cc.math.approx(angle, 0.0, 1e-5)) {
+            this._state = AIState.ROTATING;
+            return deltaTime;
+        }
+
+        const distance = cc.math.Vec3.distance(this._getAmoyPosition(targetEnemy), this.node.worldPosition);
+        if (distance <= this.attackRadius) {
+            this._characterStatus.velocity = cc.math.Vec3.ZERO;
+            this._startAttack();
+            return 0.0;
+        }
+        
+        if (distance >= this.abandonDistance) {
+            this._targetEnemy = null;
+            this._characterStatus.velocity = cc.math.Vec3.ZERO;
+            this._startIdle();
+            this._leaveChasing();
+            return deltaTime;
+        }
+
+        this._characterStatus.velocity = cc.math.Vec3.multiplyScalar(
+            new cc.math.Vec3(),
+            getForward(this.node),
+            0.8,
+        );
+        return 0.0;
+    }
+
+    private _onStateAttacking(deltaTime: number) {
+        if (this._attackFinished) {
+            this._state = AIState.CHASING;
+            return deltaTime;
+        } else {
+            return 0.0;
+        }
     }
 
     private _startIdle () {
@@ -148,12 +233,81 @@ export class MonsterAI extends cc.Component {
         this._state = AIState.STOPPING;
         this._characterStatus.localVelocity = cc.math.Vec3.ZERO;
     }
+
+    private _startChasing() {
+        this._state = AIState.CHASING;
+        this._animationController.setValue('Combating', true);
+    }
+
+    private _leaveChasing() {
+        this._animationController.setValue('Combating', false);
+    }
+
+    private _seek() {
+        const amoyController = MsAmoyController.instance;
+        if (!amoyController) {
+            return false;
+        }
+
+        const targetPosition = amoyController.node.worldPosition;
+        const distance = cc.math.Vec3.distance(targetPosition, this.node.worldPosition);
+        if (distance > this.seekingRadius) {
+            return false;
+        }
+
+        this._targetEnemy = amoyController;
+        this._state = AIState.ROTATING;
+        return true;
+    }
+
+    private _startAttack() {
+        this._state = AIState.ATTACKING;
+        this._animationController.setValue('Attack', true);
+        this._attackFinished = false;
+        const targetEnemy = this._targetEnemy;
+        if (targetEnemy) {
+            const damageable = targetEnemy.getComponent<Damageable>(Damageable);
+            if (damageable) {
+                damageable.applyDamage({});
+            }
+        }
+    }
+
+    private _getAmoyPosition(target: MsAmoyController) {
+        return target.node.worldPosition;
+    }
+
+    private _getAngleAxisToTarget(dest: cc.math.Vec3) {
+        const destDir = cc.math.Vec3.subtract(
+            new cc.math.Vec3(), dest, this.node.worldPosition);
+        if (cc.math.Vec3.equals(destDir, cc.math.Vec3.ZERO, 1e-5)) {
+            return {
+                angle: 0.0,
+                axis: cc.Vec3.ZERO,
+            };
+        }
+
+        cc.math.Vec3.normalize(destDir, destDir);
+        const currentDir = getForward(this.node);
+        const rotateAxis = cc.math.Vec3.cross(new cc.math.Vec3(), currentDir, destDir);
+        cc.math.Vec3.normalize(rotateAxis, rotateAxis);
+        const currentAngle = cc.math.Vec3.angle(
+            currentDir,
+            destDir,
+        );
+        return {
+            angle: currentAngle,
+            axis: rotateAxis,
+        };
+    }
 }
 
 enum AIState {
     NONE,
     IDLE,
     WALKING,
+    CHASING,
     STOPPING,
     ROTATING,
+    ATTACKING,
 }

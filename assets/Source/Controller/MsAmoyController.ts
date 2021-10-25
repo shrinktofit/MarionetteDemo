@@ -1,25 +1,60 @@
 
-import { _decorator, Component, Node, animation, math, input, Input, Touch, EventTouch, EventMouse, systemEvent, SystemEvent } from 'cc';
+import { _decorator, Component, Node, animation, math, input, Input, Touch, EventTouch, EventMouse, systemEvent, SystemEvent, sys } from 'cc';
+import { Damageable } from '../GamePlay/Damage/Damagable';
+import { Damage } from '../GamePlay/Damage/Damage';
+import { Joystick, JoystickEventType } from '../GamePlay/Joystick';
+import { injectComponent } from '../Utils/Component';
+import { useMouseInput } from '../Utils/Env';
 import { CharacterStatus } from './CharacterStatus';
 const { ccclass, property } = _decorator;
 
 @ccclass('MsAmoyController')
 export class MsAmoyController extends Component {
+    public static instance: MsAmoyController | null = null;
+
     @_decorator.property
     public mouseTurnSpeed = 1.0;
 
+    @_decorator.property(Node)
+    public input: Node | null = null;
+
+    @property(Joystick)
+    public joyStick!: Joystick;
+
     public start () {
-        this._charStatus = this.getComponent(CharacterStatus)!;
-        this._animationController = this.getComponent(animation.AnimationController)!;
+        MsAmoyController.instance = this;
+        
+        if (this.input) {
+            const { input } = this;
+            if (useMouseInput()) {
+                input.on(Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
+                input.on(Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
+                input.on(Node.EventType.MOUSE_UP, this._onMouseUp, this);
+            } else {
+                input.on(Node.EventType.TOUCH_START, this._onTouchBegin, this);
+                input.on(Node.EventType.TOUCH_MOVE, this._onTouchMove, this);
+            }
+        }
 
-        const input = systemEvent;
-        const Input = SystemEvent;
+        this.joyStick.on(JoystickEventType.MOVE, (joystickDirection: Readonly<math.Vec2>) => {
+            const baseSpeed = this._ironSights ? 1.0 : 2.0;
+            const velocity = new math.Vec3(-joystickDirection.x, 0.0, joystickDirection.y);
+            math.Vec3.normalize(velocity, velocity);
+            math.Vec3.multiplyScalar(velocity, velocity, baseSpeed);
+            this._charStatus.localVelocity = velocity;
+        });
 
-        input.on(Input.EventType.MOUSE_DOWN, this._onMouseDown, this);
-        input.on(Input.EventType.MOUSE_MOVE, this._onMouseMove, this);
-        input.on(Input.EventType.MOUSE_UP, this._onMouseUp, this);
-        input.on(Input.EventType.TOUCH_START, this._onTouchBegin, this);
-        input.on(Input.EventType.TOUCH_MOVE, this._onTouchMove, this);
+        this.joyStick.on(JoystickEventType.RELEASE, () => {
+            this._charStatus.velocity = math.Vec3.ZERO;
+        });
+
+        this._damageable.on(Damageable.EventType.DAMAGE, (damage: Damage) => {
+            this._onDamaged(damage);
+        });
+    }
+
+    public onDestroy() {
+        MsAmoyController.instance = null;
     }
 
     public update () {
@@ -65,10 +100,17 @@ export class MsAmoyController extends Component {
         this._animationController.setValue('VelocityY', value);
     }
 
+    @injectComponent(CharacterStatus)
+    private _charStatus!: CharacterStatus;
+
+    @injectComponent(animation.AnimationController)
+    private _animationController!: animation.AnimationController;
+
+    @injectComponent(Damageable)
+    private _damageable!: Damageable;
+
     private _crouching = false;
     private _ironSights = false;
-    private declare _charStatus: CharacterStatus;
-    private declare _animationController: animation.AnimationController;
     private _turnEnabled = false;
 
     private _onMouseDown (event: EventMouse) {
@@ -109,5 +151,9 @@ export class MsAmoyController extends Component {
     }
 
     private _onTouchMove (eventTouch: EventTouch) {
+    }
+
+    private _onDamaged(damage: Damage) {
+        this._animationController.setValue('Hit', true);
     }
 }

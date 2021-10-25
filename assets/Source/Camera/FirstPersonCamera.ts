@@ -6,43 +6,90 @@
 //  - https://docs.cocos.com/creator/manual/en/scripting/life-cycle-callbacks.html
 
 import * as cc from 'cc';
+import { useMouseInput } from '../Utils/Env';
 import { reflect } from '../Utils/Math';
 import { getForward } from '../Utils/NodeUtils';
 
 @cc._decorator.ccclass('FirstPersonCamera')
 @cc._decorator.executionOrder(9999)
 export class FirstPersonCamera extends cc.Component {
-    @cc._decorator.property(cc.Node)
+    @cc._decorator.property({
+        type: cc.Node,
+        displayName: '输入设备',
+        tooltip: '输入设备。可以选择某个 UI 节点。',
+    })
     public input: cc.Node | null = null;
 
-    @cc._decorator.property
+    @cc._decorator.property({
+        displayName: '最小距离',
+        tooltip: '与目标的最小距离。',
+    })
+    public minDistance = 0.1;
+
+    @cc._decorator.property({
+        displayName: '最大距离',
+        tooltip: '与目标的最大距离。',
+    })
+    public maxDistance = 20.0;
+
+    @cc._decorator.property({
+        displayName: '初始距离',
+        tooltip: '初始时与目标的距离。',
+    })
     public initialDistance = 1.0;
 
-    @cc._decorator.property
+    @cc._decorator.property({
+        displayName: '初始水平旋转',
+        tooltip: '初始时在水平方向上的旋转。',
+    })
     public initialHorizonRotation = 0.0;
 
-    @cc._decorator.property
+    @cc._decorator.property({
+        displayName: '初始垂直旋转',
+        tooltip: '初始时在垂直方向上的旋转。',
+    })
     public initialVerticalRotation = 45.0;
 
-    @cc._decorator.property
+    @cc._decorator.property({
+        displayName: '水平旋转速度',
+        tooltip: '在水平方向上的旋转速度。',
+    })
     public horizonRotationSpeed = 1.0;
 
-    @cc._decorator.property
+    @cc._decorator.property({
+        displayName: '垂直旋转速度',
+        tooltip: '在垂直方向上的旋转速度。',
+    })
     public verticalRotationSpeed = 1.0;
 
-    @cc._decorator.property
+    @cc._decorator.property({
+        displayName: '滚轮拉近速度',
+        tooltip: '鼠标滚轮拉近速度。',
+    })
     public mouseWheelSpeed = 0.01;
 
-    @cc._decorator.property
+    @cc._decorator.property({
+        displayName: '触摸拉近速度',
+        tooltip: '触摸拉近速度。',
+    })
     public touchZoomSpeed = 0.01;
 
-    @cc._decorator.property(cc.Node)
+    @cc._decorator.property({
+        type: cc.Node,
+        displayName: '目标',
+        tooltip: '要跟随的目标。',
+    })
     public target!: cc.Node;
 
-    @cc._decorator.property
+    @cc._decorator.property({
+        displayName: '自动跟随',
+        tooltip: '是否启用自动跟随。启用后，将在目标位置发生改变时自动调整至目标后方。',
+    })
     public autoTraceEnabled = true;
 
     @cc._decorator.property({
+        displayName: '自动跟随速度',
+        tooltip: '自动跟随速度。',
         visible(this: FirstPersonCamera) {
             return this.autoTraceEnabled;
         },
@@ -54,27 +101,30 @@ export class FirstPersonCamera extends cc.Component {
         this._rotateHorizon(this.initialHorizonRotation);
         this._rotateVertical(this.initialVerticalRotation);
         this._updatePosition();
-        if (this.input) {
-            if (cc.sys.hasFeature(cc.sys.Feature.EVENT_MOUSE)) {
-                this.input.on(cc.Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
-                this.input.on(cc.Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
-                this.input.on(cc.Node.EventType.MOUSE_UP, this._onMouseUp, this);
-                this.input.on(cc.Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
+        const { input } = this;
+        if (input) {
+            if (useMouseInput()) {
+                input.on(cc.Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
+                input.on(cc.Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
+                input.on(cc.Node.EventType.MOUSE_UP, this._onMouseUp, this);
+                input.on(cc.Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
             } else {
-                this.input.on(cc.Node.EventType.TOUCH_START, this._onTouchBegin, this);
-                this.input.on(cc.Node.EventType.TOUCH_MOVE, this._onTouchMove, this);
-                this.input.on(cc.Node.EventType.TOUCH_END, this._onTouchEnd, this);
+                console.log(`Touch`);
+                input.on(cc.Node.EventType.TOUCH_START, this._onTouchBegin, this);
+                input.on(cc.Node.EventType.TOUCH_MOVE, this._onTouchMove, this);
+                input.on(cc.Node.EventType.TOUCH_END, this._onTouchEnd, this);
             }
         }
     }
 
     public onDestroy () {
-        if (this.input) {
-            if (cc.sys.hasFeature(cc.sys.Feature.EVENT_MOUSE)) {
-                this.input.off(cc.Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
-                this.input.off(cc.Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
-                this.input.off(cc.Node.EventType.MOUSE_UP, this._onMouseUp, this);
-                this.input.off(cc.Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
+        const { input } = this;
+        if (input) {
+            if (useMouseInput()) {
+                input.off(cc.Node.EventType.MOUSE_DOWN, this._onMouseDown, this);
+                input.off(cc.Node.EventType.MOUSE_MOVE, this._onMouseMove, this);
+                input.off(cc.Node.EventType.MOUSE_UP, this._onMouseUp, this);
+                input.off(cc.Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this);
             }
         }
     }
@@ -105,6 +155,10 @@ export class FirstPersonCamera extends cc.Component {
     };
 
     private _previousTwoTouchDistance = 0.0;
+    private _touches: Array<{
+        id: number;
+        location: cc.Vec2;
+    }> = [];
 
     private _calcTransform (targetPosition: cc.math.Vec3, outPosition: cc.math.Vec3, outRotation: cc.math.Quat) {
         const dir = cc.math.Vec3.normalize(new cc.math.Vec3(), this._currentDir);
@@ -151,59 +205,81 @@ export class FirstPersonCamera extends cc.Component {
     }
 
     private _onTouchBegin (eventTouch: cc.EventTouch) {
-        const allTouches = eventTouch.getAllTouches();
-        switch (allTouches.length) {
-            default: break;
-            case 2: {
-                const [touch1, touch2] = allTouches;
-                this._previousTwoTouchDistance = cc.math.Vec2.distance(
-                    touch1.getLocation(),
-                    touch2.getLocation(),
-                );
-                break;
+        console.log(`Touches Begin: ${eventTouch.getTouches().length}`);
+        const touches = eventTouch.getTouches();
+        for (const touch of touches) {
+            if (this._touches.length < 2) {
+                this._touches.push({
+                    id: touch.getID(),
+                    location: cc.math.Vec2.clone(touch.getLocation()),
+                });
             }
         }
     }
 
     private _onTouchMove (eventTouch: cc.EventTouch) {
-        const allTouches = eventTouch.getAllTouches();
-        switch (allTouches.length) {
-            default: break;
-            case 1: {
-                if (this._mouseOrTouchMoveEnabled && eventTouch.touch) {
-                    const delta = eventTouch.touch.getDelta();
-                    const dx = delta.x;
-                    if (dx) {
-                        const angle = -dx * this.horizonRotationSpeed;
-                        this._rotateHorizon(angle);
-                    }
-                    const dy = delta.y;
-                    if (dy) {
-                        const angle = -dy * this.verticalRotationSpeed;
-                        this._rotateVertical(angle);
-                    }
-                }
-                break;
+        console.log(`Touches Move: ${this._touches.length}`);
+        if (this._touches.length !== 2) {
+            return;
+        }
+
+        const touches = eventTouch.getTouches();
+        if (touches.length !== 2) {
+            return;
+        }
+
+        const newTouches = this._touches.map(({ id }) => touches.find((touch) => touch.getID() === id));
+        if (newTouches.some((touch) => !touch)) {
+            return;
+        }
+
+        const oldTouch0Location = this._touches[0].location;
+        const oldTouch1Location = this._touches[1].location;
+        const newTouch0Location = newTouches[0]!.getLocation();
+        const newTouch1Location = newTouches[1]!.getLocation();
+
+        const dir0 = cc.math.Vec2.subtract(new cc.math.Vec2(), newTouch0Location, oldTouch0Location);
+        cc.math.Vec2.normalize(dir0, dir0);
+        const dir1 = cc.math.Vec2.subtract(new cc.math.Vec2(), newTouch1Location, oldTouch1Location);
+        cc.math.Vec2.normalize(dir1, dir1);
+
+        const angle = cc.math.toDegree(cc.math.Vec2.angle(dir0, dir1));
+        if (angle > 170.0) {
+            // Zoom
+            const previousDistance = cc.math.Vec2.distance(
+                oldTouch0Location,
+                oldTouch1Location,
+            );
+            const thisDistance = cc.math.Vec2.distance(
+                newTouch0Location,
+                newTouch1Location,
+            );
+            const dDistance = thisDistance - previousDistance;
+            if (dDistance !== 0) {
+                const deltaZoom = -this.touchZoomSpeed * dDistance;
+                this._zoomDelta(deltaZoom);
             }
-            case 2: {
-                const [touch1, touch2] = allTouches;
-                const distance = cc.math.Vec2.distance(
-                    touch1.getLocation(),
-                    touch2.getLocation(),
-                );
-                const dDistance = distance - this._previousTwoTouchDistance;
-                this._previousTwoTouchDistance = distance;
-                if (dDistance !== 0) {
-                    const deltaZoom = -this.touchZoomSpeed * dDistance;
-                    this._zoomDelta(deltaZoom);
-                }
-                break;
+        } else if (angle < 10.0) {
+            const delta = cc.math.Vec2.subtract(new cc.math.Vec2(), newTouch0Location, oldTouch0Location);
+            const dx = delta.x;
+            if (dx) {
+                const angle = -dx * this.horizonRotationSpeed;
+                this._rotateHorizon(angle);
+            }
+            const dy = delta.y;
+            if (dy) {
+                const angle = -dy * this.verticalRotationSpeed;
+                this._rotateVertical(angle);
             }
         }
+
+        cc.math.Vec2.copy(oldTouch0Location, newTouch0Location);
+        cc.math.Vec2.copy(oldTouch1Location, newTouch1Location);
     }
 
-    private _onTouchEnd (touch: cc.Touch) {
-        
+    private _onTouchEnd (eventTouch: cc.EventTouch) {
+        this._touches = this._touches.filter((touch) =>
+            eventTouch.getTouches().findIndex((removal) => removal.getID() !== touch.id) < 0);
     }
 
     private _updatePosition () {
@@ -243,8 +319,9 @@ export class FirstPersonCamera extends cc.Component {
     }
 
     private _zoom (distance: number) {
+        const clamped = cc.math.clamp(distance, this.minDistance, this.maxDistance);
         cc.math.Vec3.normalize(this._currentDir, this._currentDir);
-        cc.math.Vec3.multiplyScalar(this._currentDir, this._currentDir, distance);
+        cc.math.Vec3.multiplyScalar(this._currentDir, this._currentDir, clamped);
         this._currentDirDirty = true;
     }
 
