@@ -1,6 +1,7 @@
 
-import { _decorator, Component, Node, Eventify } from 'cc';
+import { _decorator, Component, Node, Eventify, math } from 'cc';
 import { Damage } from './Damage';
+import { DAMAGE_TABLE } from './DamageTable';
 const { ccclass, property } = _decorator;
 
 /**
@@ -38,6 +39,25 @@ export class Damageable extends Eventify(Component) {
     // }
 
     public applyDamage(damage: Damage) {
+        const damageConstants = DAMAGE_TABLE[damage.key];
+
+        const direction = math.Vec3.subtract(
+            new math.Vec3(),
+            this.node.worldPosition,
+            damage.source.node.worldPosition,
+        );
+
+        const distance = math.Vec3.len(direction);
+
+        if (distance > damageConstants.distance) {
+            return;
+        }
+
+        const angle = math.Vec3.angle(direction, damage.direction);
+        if (angle > math.toRadian(damageConstants.angle)) {
+            return;
+        }
+
         this.emit(DamageEventType.DAMAGE, damage);
     }
 }

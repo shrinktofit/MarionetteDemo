@@ -42,10 +42,13 @@
       },
       {
         "__id__": 146
+      },
+      {
+        "__id__": 148
       }
     ],
     "_prefab": {
-      "__id__": 148
+      "__id__": 150
     },
     "_lpos": {
       "__type__": "cc.Vec3",
@@ -3865,7 +3868,7 @@
     "minSpeed": 1,
     "maxSpeed": 2,
     "seekingRadius": 3,
-    "attackRadius": 2,
+    "attackRadius": 1.5,
     "abandonDistance": 5,
     "patrolEnabled": false,
     "_id": ""
@@ -3900,6 +3903,23 @@
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "f4Sp0YVAxL/JeJfwHjrxR0"
+  },
+  {
+    "__type__": "98fe4JmGaxKIqSJ1Qg3+39D",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 149
+    },
+    "_id": ""
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "57ek3yWMFKQY1BgcuZ9bpQ"
   },
   {
     "__type__": "cc.PrefabInfo",

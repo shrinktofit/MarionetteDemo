@@ -1,10 +1,11 @@
 
-import { _decorator, Component, Node, animation, math, input, Input, Touch, EventTouch, EventMouse, systemEvent, SystemEvent, sys } from 'cc';
+import { _decorator, Component, Node, animation, math, input, Input, Touch, EventTouch, EventMouse, systemEvent, SystemEvent, sys, Prefab, instantiate, RigidBody } from 'cc';
 import { Damageable } from '../GamePlay/Damage/Damagable';
 import { Damage } from '../GamePlay/Damage/Damage';
 import { Joystick, JoystickEventType } from '../GamePlay/Joystick';
 import { injectComponent } from '../Utils/Component';
 import { useMouseInput } from '../Utils/Env';
+import { getForward } from '../Utils/NodeUtils';
 import { CharacterStatus } from './CharacterStatus';
 const { ccclass, property } = _decorator;
 
@@ -20,6 +21,12 @@ export class MsAmoyController extends Component {
 
     @property(Joystick)
     public joyStick!: Joystick;
+
+    @property(Node)
+    public gun!: Node;
+
+    @property(Prefab)
+    public bullet!: Prefab;
 
     public start () {
         MsAmoyController.instance = this;
@@ -85,6 +92,17 @@ export class MsAmoyController extends Component {
             return;
         }
         this._animationController.setValue('Fire', true);
+        // const gun = this.gun;
+        // for (let i = 0; i < 1; ++i) {
+        //     const bullet = instantiate(this.bullet);
+        //     bullet.setPosition(gun.worldPosition);
+        //     bullet.forward = gun.forward;
+        //     gun.scene.addChild(bullet);
+        //     const rigidBody = bullet.getComponentInChildren<RigidBody>(RigidBody)!;
+        //     rigidBody.applyForce(
+        //         math.Vec3.multiplyScalar(new math.Vec3(), getForward(this.node), 50.0),
+        //     );
+        // }
     }
 
     public onIronSightsClicked() {

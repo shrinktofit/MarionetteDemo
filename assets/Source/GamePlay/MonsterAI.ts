@@ -6,6 +6,9 @@ import { ShapeSelector } from '../Utils/Shape';
 import { getForward } from '../Utils/NodeUtils';
 import { MsAmoyController } from '../Controller/MsAmoyController';
 import { Damageable } from './Damage/Damagable';
+import { waitFor } from '../Utils/Misc';
+import { DamageKey } from './Damage/DamageTable';
+import { Damage } from './Damage/Damage';
 
 @cc._decorator.ccclass('MonsterAI')
 export class MonsterAI extends cc.Component {
@@ -34,6 +37,12 @@ export class MonsterAI extends cc.Component {
     public patrolEnabled = true;
 
     public declare shapeSelector: ShapeSelector;
+
+    start () {
+        this._damageable.on(Damageable.EventType.DAMAGE, (damage) => {
+            this._onDamaged(damage);
+        });
+    }
     
     update (deltaTime: number) {
         while (!cc.math.approx(deltaTime, 0.0, 1e-5)) {
@@ -85,6 +94,9 @@ export class MonsterAI extends cc.Component {
 
     @injectComponent(cc.animation.AnimationController)
     public _animationController!: cc.animation.AnimationController;
+
+    @injectComponent(Damageable)
+    public _damageable!: Damageable;
 
     private _state: AIState = AIState.NONE;
 
@@ -268,9 +280,20 @@ export class MonsterAI extends cc.Component {
         if (targetEnemy) {
             const damageable = targetEnemy.getComponent<Damageable>(Damageable);
             if (damageable) {
-                damageable.applyDamage({});
+                (async () => {
+                    await waitFor(0.5);
+                    damageable.applyDamage({
+                        key: DamageKey.CH36_ATTACK,
+                        source: this,
+                        direction: getForward(this.node),
+                    });
+                })();
             }
         }
+    }
+
+    private _onDamaged(damage: Damage) {
+        this._animationController.setValue('Hit', true);
     }
 
     private _getAmoyPosition(target: MsAmoyController) {
