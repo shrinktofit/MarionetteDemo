@@ -45,10 +45,13 @@
       },
       {
         "__id__": 148
+      },
+      {
+        "__id__": 150
       }
     ],
     "_prefab": {
-      "__id__": 150
+      "__id__": 152
     },
     "_lpos": {
       "__type__": "cc.Vec3",
@@ -3867,10 +3870,11 @@
     "maxIdleTime": 1,
     "minSpeed": 1,
     "maxSpeed": 2,
-    "seekingRadius": 3,
+    "attackEnabled": true,
+    "seekingRadius": 2.5,
     "attackRadius": 1.5,
     "abandonDistance": 5,
-    "patrolEnabled": false,
+    "patrolEnabled": true,
     "_id": ""
   },
   {
@@ -3920,6 +3924,42 @@
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "57ek3yWMFKQY1BgcuZ9bpQ"
+  },
+  {
+    "__type__": "cc.RigidBody",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 151
+    },
+    "_group": 4,
+    "_type": 1,
+    "_mass": 1,
+    "_allowSleep": true,
+    "_linearDamping": 0.1,
+    "_angularDamping": 0.1,
+    "_useGravity": true,
+    "_linearFactor": {
+      "__type__": "cc.Vec3",
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "_angularFactor": {
+      "__type__": "cc.Vec3",
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "_id": ""
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "f6xy6/1RVCmqNnRxnrd6/H"
   },
   {
     "__type__": "cc.PrefabInfo",

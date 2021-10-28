@@ -16,14 +16,10 @@ const { ccclass, property } = _decorator;
 @ccclass("RandomIdle")
 export class RandomIdle extends animation.StateMachineComponent {
     
-    onEnter (controller: animation.AnimationController) {
+    onMotionStateEnter (controller: animation.AnimationController) {
         const idleShuffle = Math.random();
         controller.setValue('IdleShuffle', idleShuffle);
         console.debug(idleShuffle);
         controller.setValue('Idling', true);
-    }
-  
-    onExit (controller: animation.AnimationController) {
-  
     }
 }

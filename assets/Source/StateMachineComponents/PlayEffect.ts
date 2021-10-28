@@ -16,12 +16,12 @@ const { ccclass, property } = _decorator;
 @ccclass("PlayEffect")
 export class PlayEffect extends animation.StateMachineComponent {
     
-    onEnter (controller: animation.AnimationController) {
+    onMotionStateEnter (controller: animation.AnimationController) {
         const component = controller.getComponentInChildren<ParticleSystem>(ParticleSystem);
         component?.play();
     }
   
-    onExit (controller: animation.AnimationController) {
+    onMotionStateExit (controller: animation.AnimationController) {
         const component = controller.getComponentInChildren<ParticleSystem>(ParticleSystem);
         component?.stop();
     }

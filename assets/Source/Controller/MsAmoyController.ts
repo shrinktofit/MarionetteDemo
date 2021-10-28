@@ -1,5 +1,5 @@
 
-import { _decorator, Component, Node, animation, math, input, Input, Touch, EventTouch, EventMouse, systemEvent, SystemEvent, sys, Prefab, instantiate, RigidBody } from 'cc';
+import { _decorator, Component, Node, animation, math, input, Input, Touch, EventTouch, EventMouse, systemEvent, SystemEvent, sys, Prefab, instantiate, RigidBody, PhysicsSystem, RecyclePool, physics, geometry } from 'cc';
 import { Damageable } from '../GamePlay/Damage/Damagable';
 import { Damage } from '../GamePlay/Damage/Damage';
 import { Joystick, JoystickEventType } from '../GamePlay/Joystick';
@@ -8,6 +8,9 @@ import { useMouseInput } from '../Utils/Env';
 import { getForward } from '../Utils/NodeUtils';
 import { CharacterStatus } from './CharacterStatus';
 const { ccclass, property } = _decorator;
+import {} from 'cc/custom-macro';
+import { DamageKey, DAMAGE_TABLE } from '../GamePlay/Damage/DamageTable';
+import { waitFor } from '../Utils/Misc';
 
 @ccclass('MsAmoyController')
 export class MsAmoyController extends Component {
@@ -91,7 +94,10 @@ export class MsAmoyController extends Component {
         if (this._crouching) {
             return;
         }
-        this._animationController.setValue('Fire', true);
+        if (!this._canFire) {
+            return;
+        }
+        this._fire();
         // const gun = this.gun;
         // for (let i = 0; i < 1; ++i) {
         //     const bullet = instantiate(this.bullet);
@@ -130,6 +136,11 @@ export class MsAmoyController extends Component {
     private _crouching = false;
     private _ironSights = false;
     private _turnEnabled = false;
+    private _canFire = true;
+    private _rayCastResultPool = new RecyclePool<physics.PhysicsRayResult>(
+        () => new physics.PhysicsRayResult(),
+        4,
+    );
 
     private _onMouseDown (event: EventMouse) {
         switch (event.getButton()) {
@@ -173,5 +184,51 @@ export class MsAmoyController extends Component {
 
     private _onDamaged(damage: Damage) {
         this._animationController.setValue('Hit', true);
+    }
+
+    private _fire() {
+        this._canFire = false;
+
+        const {
+            node,
+            gun,
+            _rayCastResultPool: pool,
+        } = this;
+
+        this._animationController.setValue('Fire', true);
+
+        const forward = getForward(node);
+        const firePosition = gun.worldPosition;
+        const ray = new geometry.Ray(
+            firePosition.x,
+            firePosition.y,
+            firePosition.z,
+            forward.x,
+            forward.y,
+            forward.z,
+        );
+        const attackInfo = DAMAGE_TABLE[DamageKey.AMOY_ATTACK];
+        if (PhysicsSystem.instance.raycast(
+            ray,
+            1 << 2,
+            attackInfo.distance,
+            false,
+        )) {
+            for (const raycastResult of PhysicsSystem.instance.raycastResults) {
+                const damageable = raycastResult.collider.node.getComponent<Damageable>(Damageable);
+                if (damageable) {
+                    damageable.applyDamage({
+                        key: DamageKey.AMOY_ATTACK,
+                        source: this,
+                        direction: forward,
+                    });
+                }
+            }
+        }
+
+        (async () => {
+            await waitFor(0.3);
+            this._canFire = true;
+        })();
     }
 }

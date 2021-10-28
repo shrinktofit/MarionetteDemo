@@ -39,8 +39,8 @@
     "__editorExtras__": {
       "viewport": {
         "scale": 1,
-        "top": -152,
-        "left": -81
+        "top": -194,
+        "left": -39
       }
     },
     "_states": [
@@ -736,7 +736,7 @@
     },
     "conditions": [],
     "duration": 0.2,
-    "relativeDuration": true,
+    "relativeDuration": false,
     "exitConditionEnabled": true,
     "_exitCondition": 0.8
   },

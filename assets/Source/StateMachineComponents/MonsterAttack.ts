@@ -17,10 +17,10 @@ const { ccclass, property } = _decorator;
 @ccclass("MonsterAttack")
 export class MonsterAttack extends animation.StateMachineComponent {
     
-    onEnter (controller: animation.AnimationController) {
+    onMotionStateEnter (controller: animation.AnimationController) {
     }
   
-    onExit (controller: animation.AnimationController) {
+    onMotionStateExit (controller: animation.AnimationController) {
         const monsterAI = controller.node.getComponent<MonsterAI>(MonsterAI)!;
         monsterAI.onAttackFinished();
     }

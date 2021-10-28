@@ -25,12 +25,27 @@ export class MonsterAI extends cc.Component {
     public maxSpeed = 1.0;
 
     @cc._decorator.property
+    public attackEnabled = true;
+
+    @cc._decorator.property({
+        visible: function(this: MonsterAI) {
+            return this.attackEnabled;
+        },
+    })
     public seekingRadius = 0.0;
 
-    @cc._decorator.property
+    @cc._decorator.property({
+        visible: function(this: MonsterAI) {
+            return this.attackEnabled;
+        },
+    })
     public attackRadius = 0.0;
 
-    @cc._decorator.property
+    @cc._decorator.property({
+        visible: function(this: MonsterAI) {
+            return this.attackEnabled;
+        },
+    })
     public abandonDistance = 0.0;
 
     @cc._decorator.property
@@ -46,16 +61,18 @@ export class MonsterAI extends cc.Component {
     
     update (deltaTime: number) {
         while (!cc.math.approx(deltaTime, 0.0, 1e-5)) {
-            if (!this._targetEnemy) {
-                switch (this._state) {
-                    case AIState.IDLE:
-                    case AIState.ROTATING:
-                    case AIState.WALKING:
-                    case AIState.STOPPING:
-                        if (this._seek()) {
-                            continue;
-                        }
-                        break;
+            if (this.attackEnabled) {
+                if (!this._targetEnemy) {
+                    switch (this._state) {
+                        case AIState.IDLE:
+                        case AIState.ROTATING:
+                        case AIState.WALKING:
+                        case AIState.STOPPING:
+                            if (this._seek()) {
+                                continue;
+                            }
+                            break;
+                    }
                 }
             }
 
@@ -171,12 +188,25 @@ export class MonsterAI extends cc.Component {
             return deltaTime;
         }
 
+        function onlyYRotation(node: cc.Node) {
+            const euler = node.eulerAngles;
+            return cc.math.approx(euler.x, 0.0, 1e-4) && cc.math.approx(euler.z, 0.0, 1e-4);
+        }
+
+        if (!onlyYRotation(this.node)) {
+            debugger;
+        }
+
         const rotateSpeed = cc.math.toRadian(180.0);
         const timeRequired = currentAngle / rotateSpeed;
         const time = Math.min(deltaTime, timeRequired);
         const q = cc.math.Quat.fromAxisAngle(new cc.math.Quat(), rotateAxis, time * rotateSpeed);
         const rotation = cc.math.Quat.multiply(new cc.math.Quat(), this.node.worldRotation, q);
         this.node.setWorldRotation(rotation);
+
+        if (!onlyYRotation(this.node)) {
+            debugger;
+        }
         
         return deltaTime - time;
     }
